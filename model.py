@@ -14,7 +14,7 @@ fake_news["label"] = 1
 
 # Объединение и перемешивание
 data = pd.concat([true_news, fake_news]).sample(frac=1, random_state=42)
-X = data["text"]  # Можно добавить 'title' для улучшения качества
+X = data["text"] 
 y = data["label"]
 
 # Векторизация текста

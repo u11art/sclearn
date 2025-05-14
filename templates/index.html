@@ -1,25 +1,184 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="h-full">
 <head>
     <meta charset="UTF-8">
     <title>Детектор фейковых новостей</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        textarea { width: 100%; padding: 10px; }
-        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-        .result { margin-top: 20px; padding: 10px; background: #f0f0f0; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {"50":"#f0fdf4","100":"#dcfce7","200":"#bbf7d0","300":"#86efac","400":"#4ade80","500":"#22c55e","600":"#16a34a","700":"#15803d","800":"#166534","900":"#14532d"}
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-    <h1>Проверка новости на фейк</h1>
-    <form method="POST">
-        <textarea name="news_text" rows="5" placeholder="Вставьте текст новости..."></textarea><br>
-        <button type="submit">Проверить</button>
-    </form>
-    {% if result %}
-        <div class="result">
-            <h2>Результат: {{ result }}</h2>
+<body class="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <nav class="bg-white dark:bg-gray-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Детектор фейковых новостей</h1>
+                </div>
+                <div class="flex items-center">
+                    <button id="themeToggle" class="p-3 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-white">
+                        <svg id="sunIcon" class="w-6 h-6 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                        </svg>
+                        <svg id="moonIcon" class="w-6 h-6 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
         </div>
-    {% endif %}
+    </nav>
+
+    <main class="flex-1 w-full mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-4xl flex flex-col">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 sm:p-6 flex-1 flex flex-col min-h-[500px]">
+            <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-4">Проверка новости</h2>
+            <p class="text-base sm:text-lg text-gray-600 dark:text-gray-300 mb-4">
+                Вставьте текст новости в поле ниже, и мы проверим, является ли она фейковой или достоверной.
+                <br>Важно введите текст новости на английском языке.
+            </p>
+            <textarea 
+                id="newsText"
+                class="flex-1 w-full p-3 sm:p-4 text-base sm:text-lg border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y min-h-[200px]" 
+                placeholder="Вставьте текст новости..."
+            ></textarea>
+            <button 
+                onclick="checkNews()"
+                class="mt-4 px-6 py-4 text-base sm:text-lg bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors duration-200"
+            >
+                Проверить
+            </button>
+        </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="resultModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-4 sm:p-5 border w-11/12 sm:w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg sm:text-xl leading-6 font-medium text-gray-900 dark:text-white" id="modalTitle">Результат проверки</h3>
+                <div class="mt-2 px-4 sm:px-7 py-3">
+                    <p class="text-base sm:text-lg text-gray-500 dark:text-gray-300" id="modalMessage"></p>
+                </div>
+                <div class="items-center px-4 py-3">
+                    <button id="closeModal" class="px-6 py-3 text-base sm:text-lg bg-primary-600 text-white font-medium rounded-md shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        
+        function updateTheme() {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        themeToggle.addEventListener('click', () => {
+            if (localStorage.theme === 'dark') {
+                localStorage.theme = 'light';
+            } else {
+                localStorage.theme = 'dark';
+            }
+            updateTheme();
+        });
+
+        updateTheme();
+
+        // News check functionality
+        async function checkNews() {
+            const newsText = document.getElementById('newsText').value;
+            const modal = document.getElementById('resultModal');
+            const modalMessage = document.getElementById('modalMessage');
+
+            if (!newsText) {
+                modalMessage.textContent = 'Пожалуйста, введите текст новости';
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ news_text: newsText })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const probability = data.is_fake ? data.fake_probability : data.true_probability;
+                    modalMessage.textContent = data.is_fake ? 
+                        `Это похоже на фейковую новость с вероятностью ${data.fake_probability}%` : 
+                        `Это похоже на достоверную новость с вероятностью ${data.true_probability}%`;
+                    modalMessage.className = data.is_fake ? 
+                        'text-red-500 font-medium' : 
+                        'text-green-500 font-medium';
+                } else {
+                    modalMessage.textContent = `Ошибка: ${data.error}`;
+                    modalMessage.className = 'text-red-500';
+                }
+            } catch (error) {
+                modalMessage.textContent = `Ошибка при проверке: ${error.message}`;
+                modalMessage.className = 'text-red-500';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // Modal close functionality
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('resultModal').classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('resultModal').addEventListener('click', (e) => {
+            if (e.target.id === 'resultModal') {
+                document.getElementById('resultModal').classList.add('hidden');
+            }
+        });
+    </script>
+
+    <footer class="bg-white dark:bg-gray-800 shadow-lg mt-4 sm:mt-8">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:py-6">
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4 sm:pt-6">
+                <div class="text-center">
+                    <h3 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        Важная информация
+                    </h3>
+                    <div class="text-base sm:text-lg text-gray-600 dark:text-gray-300 space-y-2">
+                        <p>Данный детектор использует искусственный интеллект для анализа новостей, 
+                        но его результаты не следует считать абсолютно достоверными.</p>
+                        <p>Рекомендуется:</p>
+                        <ul class="list-disc list-inside mb-4">
+                            <li>Проверять информацию в нескольких надежных источниках</li>
+                            <li>Обращать внимание на даты публикации</li>
+                            <li>Критически оценивать содержание новости</li>
+                        </ul>
+                        <p class="text-sm sm:text-base text-gray-500 dark:text-gray-400">
+                            © 2025 Детектор фейковых новостей. Точность определения может варьироваться.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
 </body>
 </html>

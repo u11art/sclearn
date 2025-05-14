@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, render_template, jsonify
 import pickle
 
 app = Flask(__name__)
@@ -9,15 +9,31 @@ with open("models/model.pkl", "rb") as f:
 with open("models/vectorizer.pkl", "rb") as f:
     vectorizer = pickle.load(f)
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def home():
-    result = None
-    if request.method == "POST":
-        text = request.form["news_text"]
+    return render_template("index.html")
+
+@app.route("/api/check", methods=["POST"])
+def check_news():
+    try:
+        data = request.get_json()
+        text = data.get("news_text")
+        
+        if not text:
+            return jsonify({"error": "No news text provided"}), 400
+        
         text_tfidf = vectorizer.transform([text])
-        prediction = model.predict(text_tfidf)[0]
-        result = "Фейк!" if prediction == 1 else "Настоящая новость."
-    return render_template("index.html", result=result)
+        probabilities = model.predict_proba(text_tfidf)[0]
+        prediction = probabilities[1] >= 0.5  # True если вероятность фейка >= 50%
+        
+        return jsonify({
+            "is_fake": bool(prediction),
+            "fake_probability": round(float(probabilities[1]) * 100, 2),  # вероятность в процентах
+            "true_probability": round(float(probabilities[0]) * 100, 2)   # вероятность в процентах
+        })
+    
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
